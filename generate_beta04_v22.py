@@ -168,32 +168,30 @@ def create_beta04_analysis_v22(source_file, output_file):
         col_letter = get_column_letter(3 + i)
         ws.column_dimensions[col_letter].width = 15
 
-    # 写入标题行
-    ws['A1'] = 'Beta_04 财务分析表'
-    ws['A1'].font = Font(bold=True, size=14)
-
-    # 写入年份标题
+    # 写入年份标题（第1行）
+    ws['B1'] = '定价'
+    ws['C1'] = '定价'
     for i, year in enumerate(years):
-        col_letter = get_column_letter(3 + i)
+        col_letter = get_column_letter(4 + i)
         ws[f'{col_letter}1'] = year
         ws[f'{col_letter}1'].font = Font(bold=True)
         ws[f'{col_letter}1'].alignment = Alignment(horizontal='center')
 
-    current_row = 3  # 从第3行开始写入数据
+    current_row = 2  # 从第2行开始写入数据
     row_map = {}  # 记录每个数据项的行号，用于公式引用
 
     def write_data_row(label, values, is_percentage=False, decimals=0,
-                      is_input=False, color=None, formulas=None):
+                      is_input=False, color=None, formulas=None, is_bold=False):
         """写入数据行的通用函数"""
         nonlocal current_row
 
         # 写入标签
         ws.cell(current_row, 1).value = label
-        ws.cell(current_row, 1).font = Font(bold=True)
+        ws.cell(current_row, 1).font = Font(bold=is_bold)
 
-        # 写入数据或公式
+        # 写入数据或公式（从第4列开始，即D列）
         for i in range(len(years)):
-            col_idx = 3 + i
+            col_idx = 4 + i
             cell = ws.cell(current_row, col_idx)
 
             if formulas and i < len(formulas) and formulas[i]:
@@ -252,287 +250,360 @@ def create_beta04_analysis_v22(source_file, output_file):
 
     print("正在生成分析表...")
 
-    # 1. 资产负债表数据部分
-    ws.cell(current_row, 1).value = '==== 资产负债表数据 ===='
-    ws.cell(current_row, 1).font = Font(bold=True, size=12, color='4472C4')
-    current_row += 1
+    # 第一部分：资产负债表数据（第2-26行）
+    # 资产部分
+    row_map['资产'] = write_data_row('资产', [data[year]['资产'] for year in years], color=COLOR_LINK, is_bold=True)
+    row_map['现金'] = write_data_row('现金', [data[year]['现金'] for year in years], color=COLOR_LINK)
+    row_map['投资'] = write_data_row('投资', [data[year]['投资'] for year in years], color=COLOR_LINK)
+    row_map['运营资产'] = write_data_row('运营资产', [data[year]['运营资产'] for year in years], color=COLOR_LINK)
+    row_map['应收'] = write_data_row('应收', [data[year]['应收'] for year in years], color=COLOR_LINK)
+    row_map['预付'] = write_data_row('预付', [data[year]['预付'] for year in years], color=COLOR_LINK)
+    row_map['存货'] = write_data_row('存货', [data[year]['存货'] for year in years], color=COLOR_LINK)
+    row_map['长期资产'] = write_data_row('长期资产', [data[year]['长期资产'] for year in years], color=COLOR_LINK)
 
-    # 写入资产负债表数据（17项）
-    balance_fields = ['资产', '现金', '投资', '运营资产', '应收', '预付', '存货', '长期资产',
-                     '负债', '预收', '应付', '有息负债', '权益', '资本投入', '未分配利润', '股息分红', '股本']
+    # 负债部分
+    row_map['负债'] = write_data_row('负债', [data[year]['负债'] for year in years], color=COLOR_LINK, is_bold=True)
+    row_map['预收'] = write_data_row('预收', [data[year]['预收'] for year in years], color=COLOR_LINK)
+    row_map['应付'] = write_data_row('应付', [data[year]['应付'] for year in years], color=COLOR_LINK)
+    row_map['有息负债'] = write_data_row('有息负债', [data[year]['有息负债'] for year in years], color=COLOR_LINK)
 
-    for field in balance_fields:
-        values = [data[year][field] for year in years]
-        row_map[field] = write_data_row(field, values, color=COLOR_LINK)
+    # 权益部分
+    row_map['权益'] = write_data_row('权益', [data[year]['权益'] for year in years], color=COLOR_LINK, is_bold=True)
+    row_map['资本投入'] = write_data_row('资本投入', [data[year]['资本投入'] for year in years], color=COLOR_LINK)
+    row_map['未分配利润'] = write_data_row('未分配利润', [data[year]['未分配利润'] for year in years], color=COLOR_LINK)
+    row_map['股息分红'] = write_data_row('股息分红', [data[year]['股息分红'] for year in years], color=COLOR_LINK, is_bold=True)
 
-    current_row += 1
+    current_row += 1  # 空行
 
-    # 2. 损益表数据部分
-    ws.cell(current_row, 1).value = '==== 损益表数据 ===='
-    ws.cell(current_row, 1).font = Font(bold=True, size=12, color='4472C4')
-    current_row += 1
+    # 现金结构
+    row_map['现金结构'] = write_data_row('现金结构', [data[year]['现金'] for year in years], color=COLOR_LINK, is_bold=True)
+    row_map['利润留存_现金'] = write_data_row('利润留存', [data[year]['未分配利润'] for year in years], color=COLOR_LINK)
+    # 股东、负债 = 现金 - 未分配利润
+    股东负债_formulas = []
+    for i in range(len(years)):
+        col = get_column_letter(4 + i)
+        股东负债_formulas.append(f"={col}{row_map['现金']}-{col}{row_map['未分配利润']}")
+    write_data_row('股东、负债', [None] * len(years), formulas=股东负债_formulas, color=COLOR_FORMULA)
 
-    # 写入损益表数据（19项）
-    income_fields = ['主营收入', '主营成本', '费用', '研发费用', '销售费用', '管理费用',
-                    '损耗', '其他收益', '现金收益', '利息支出', '财务费用', '所得税',
-                    '股权收益', '其他业务收入', '其他业务成本', '营业外收入', '营业外成本',
-                    '折旧摊销', '资本开支']
+    current_row += 1  # 空行
 
-    for field in income_fields:
-        values = [data[year][field] for year in years]
-        row_map[field] = write_data_row(field, values, color=COLOR_LINK)
+    # 折旧摊销和资本开支
+    row_map['折旧摊销'] = write_data_row('折旧摊销', [data[year]['折旧摊销'] for year in years], color=COLOR_LINK, is_bold=True)
+    row_map['资本开支'] = write_data_row('资本开支', [data[year]['资本开支'] for year in years], color=COLOR_LINK, is_bold=True)
 
-    current_row += 1
+    current_row += 1  # 空行
 
-    # 3. 盈利结构分析部分 - 全部使用公式
-    ws.cell(current_row, 1).value = '==== 盈利结构分析 ===='
-    ws.cell(current_row, 1).font = Font(bold=True, size=12, color='4472C4')
-    current_row += 1
+    # 股本
+    row_map['股本'] = write_data_row('股本', [data[year]['股本'] for year in years], color=COLOR_LINK, is_bold=True)
+
+    current_row += 1  # 空行
+
+    # 第二部分：损益表数据（第28-46行）
+    row_map['主营收入'] = write_data_row('主营收入', [data[year]['主营收入'] for year in years], color=COLOR_LINK, is_bold=True)
+    row_map['主营成本'] = write_data_row('主营成本', [data[year]['主营成本'] for year in years], color=COLOR_LINK)
+    row_map['费用'] = write_data_row('费用', [data[year]['费用'] for year in years], color=COLOR_LINK)
+    row_map['研发费用'] = write_data_row('研发费用', [data[year]['研发费用'] for year in years], color=COLOR_LINK)
+    row_map['销售费用'] = write_data_row('销售费用', [data[year]['销售费用'] for year in years], color=COLOR_LINK)
+    row_map['管理费用'] = write_data_row('管理费用', [data[year]['管理费用'] for year in years], color=COLOR_LINK)
+    row_map['损耗'] = write_data_row('损耗', [data[year]['损耗'] for year in years], color=COLOR_LINK)
+    row_map['其他收益'] = write_data_row('其他收益', [data[year]['其他收益'] for year in years], color=COLOR_LINK, is_bold=True)
+    row_map['现金收益'] = write_data_row('现金收益', [data[year]['现金收益'] for year in years], color=COLOR_LINK, is_bold=True)
+    row_map['股权收益'] = write_data_row('股权收益', [data[year]['股权收益'] for year in years], color=COLOR_LINK, is_bold=True)
+    row_map['利息支出'] = write_data_row('利息支出', [data[year]['利息支出'] for year in years], color=COLOR_LINK, is_bold=True)
+    row_map['财务费用'] = write_data_row('财务费用', [data[year]['财务费用'] for year in years], color=COLOR_LINK, is_bold=True)
+
+    # 其他业务
+    write_data_row('其他业务', [None] * len(years), is_bold=True)
+    row_map['其他业务收入'] = write_data_row('收入', [data[year]['其他业务收入'] for year in years], color=COLOR_LINK)
+    row_map['其他业务成本'] = write_data_row('成本', [data[year]['其他业务成本'] for year in years], color=COLOR_LINK)
+
+    # 营业外
+    write_data_row('营业外', [None] * len(years), is_bold=True)
+    row_map['营业外收入'] = write_data_row('收入', [data[year]['营业外收入'] for year in years], color=COLOR_LINK)
+    row_map['营业外成本'] = write_data_row('成本', [data[year]['营业外成本'] for year in years], color=COLOR_LINK)
+    row_map['所得税'] = write_data_row('所得税', [data[year]['所得税'] for year in years], color=COLOR_LINK, is_bold=True)
+
+    current_row += 2  # 两个空行
+
+    # 第三部分：盈利结构分析（从第49行开始）
+    write_data_row('盈利结构', [None] * len(years), is_bold=True)
+    row_map['主营收入_盈利'] = write_data_row('主营收入', [data[year]['主营收入'] for year in years], color=COLOR_LINK, is_bold=True)
+    row_map['主营成本_盈利'] = write_data_row('主营成本', [data[year]['主营成本'] for year in years], color=COLOR_LINK)
+    row_map['费用_盈利'] = write_data_row('费用', [data[year]['费用'] for year in years], color=COLOR_LINK)
+    row_map['损耗_盈利'] = write_data_row('损耗', [data[year]['损耗'] for year in years], color=COLOR_LINK)
+    row_map['其他收益_盈利'] = write_data_row('其他收益', [data[year]['其他收益'] for year in years], color=COLOR_LINK)
+    row_map['现金收益_盈利'] = write_data_row('现金收益', [data[year]['现金收益'] for year in years], color=COLOR_LINK)
+    row_map['利息支出_盈利'] = write_data_row('利息支出', [data[year]['利息支出'] for year in years], color=COLOR_LINK)
+    row_map['财务费用_盈利'] = write_data_row('财务费用', [data[year]['财务费用'] for year in years], color=COLOR_LINK)
+    row_map['所得税_盈利'] = write_data_row('所得税', [data[year]['所得税'] for year in years], color=COLOR_LINK)
 
     # 业务利润公式
     业务利润_formulas = []
     for i in range(len(years)):
-        col = get_column_letter(3 + i)
-        formula = (f"={col}{row_map['主营收入']}-{col}{row_map['主营成本']}-{col}{row_map['费用']}"
-                  f"+{col}{row_map['损耗']}+{col}{row_map['其他收益']}+{col}{row_map['现金收益']}"
-                  f"-{col}{row_map['利息支出']}-{col}{row_map['财务费用']}-{col}{row_map['所得税']}")
+        col = get_column_letter(4 + i)
+        formula = (f"={col}{row_map['主营收入_盈利']}-{col}{row_map['主营成本_盈利']}-{col}{row_map['费用_盈利']}"
+                  f"+{col}{row_map['损耗_盈利']}+{col}{row_map['其他收益_盈利']}+{col}{row_map['现金收益_盈利']}"
+                  f"-{col}{row_map['利息支出_盈利']}-{col}{row_map['财务费用_盈利']}-{col}{row_map['所得税_盈利']}")
         业务利润_formulas.append(formula)
 
     row_map['业务利润'] = write_data_row('业务利润', [None] * len(years),
-                                       formulas=业务利润_formulas, color=COLOR_FORMULA)
+                                       formulas=业务利润_formulas, color=COLOR_FORMULA, is_bold=True)
+
+    # 股权收益
+    row_map['股权收益_盈利'] = write_data_row('股权收益', [data[year]['股权收益'] for year in years], color=COLOR_LINK)
 
     # 其他业务利润公式
     其他业务利润_formulas = []
     for i in range(len(years)):
-        col = get_column_letter(3 + i)
+        col = get_column_letter(4 + i)
         formula = f"={col}{row_map['其他业务收入']}-{col}{row_map['其他业务成本']}"
         其他业务利润_formulas.append(formula)
-
     row_map['其他业务利润'] = write_data_row('其他业务利润', [None] * len(years),
                                          formulas=其他业务利润_formulas, color=COLOR_FORMULA)
 
     # 营业外利润公式
     营业外利润_formulas = []
     for i in range(len(years)):
-        col = get_column_letter(3 + i)
+        col = get_column_letter(4 + i)
         formula = f"={col}{row_map['营业外收入']}-{col}{row_map['营业外成本']}"
         营业外利润_formulas.append(formula)
-
     row_map['营业外利润'] = write_data_row('营业外利润', [None] * len(years),
                                         formulas=营业外利润_formulas, color=COLOR_FORMULA)
 
     # 净利润公式
     净利润_formulas = []
     for i in range(len(years)):
-        col = get_column_letter(3 + i)
-        formula = f"={col}{row_map['业务利润']}+{col}{row_map['股权收益']}+{col}{row_map['其他业务利润']}+{col}{row_map['营业外利润']}"
+        col = get_column_letter(4 + i)
+        formula = f"={col}{row_map['业务利润']}+{col}{row_map['股权收益_盈利']}+{col}{row_map['其他业务利润']}+{col}{row_map['营业外利润']}"
         净利润_formulas.append(formula)
-
     row_map['净利润'] = write_data_row('净利润', [None] * len(years),
                                     formulas=净利润_formulas, color=COLOR_FORMULA)
+
+    # 分红
+    row_map['分红'] = write_data_row('分红', [data[year]['股息分红'] for year in years], color=COLOR_LINK)
 
     # 利润留存公式
     利润留存_formulas = []
     for i in range(len(years)):
-        col = get_column_letter(3 + i)
-        formula = f"={col}{row_map['净利润']}-{col}{row_map['股息分红']}"
+        col = get_column_letter(4 + i)
+        formula = f"={col}{row_map['净利润']}-{col}{row_map['分红']}"
         利润留存_formulas.append(formula)
-
     row_map['利润留存'] = write_data_row('利润留存', [None] * len(years),
-                                      formulas=利润留存_formulas, color=COLOR_FORMULA)
+                                      formulas=利润留存_formulas, color=COLOR_FORMULA, is_bold=True)
 
-    # 自由现金流公式
-    自由现金流_formulas = []
+    # 折旧摊销
+    row_map['折旧摊销_盈利'] = write_data_row('折旧摊销', [data[year]['折旧摊销'] for year in years], color=COLOR_LINK)
+
+    # CAPEX
+    row_map['CAPEX'] = write_data_row('CAPEX', [data[year]['资本开支'] for year in years], color=COLOR_LINK)
+
+    # 现金留存公式
+    现金留存_formulas = []
     for i in range(len(years)):
-        col = get_column_letter(3 + i)
-        formula = f"={col}{row_map['利润留存']}+{col}{row_map['折旧摊销']}-{col}{row_map['资本开支']}"
-        自由现金流_formulas.append(formula)
+        col = get_column_letter(4 + i)
+        formula = f"={col}{row_map['利润留存']}+{col}{row_map['折旧摊销_盈利']}-{col}{row_map['CAPEX']}"
+        现金留存_formulas.append(formula)
+    row_map['现金留存'] = write_data_row('现金留存', [None] * len(years),
+                                      formulas=现金留存_formulas, color=COLOR_FORMULA, is_bold=True)
 
-    row_map['自由现金流'] = write_data_row('自由现金流', [None] * len(years),
-                                        formulas=自由现金流_formulas, color=COLOR_FORMULA)
+    # 业务现金公式（业务利润 + 折旧摊销 - 资本开支）
+    业务现金_formulas = []
+    for i in range(len(years)):
+        col = get_column_letter(4 + i)
+        formula = f"={col}{row_map['业务利润']}+{col}{row_map['折旧摊销_盈利']}-{col}{row_map['CAPEX']}"
+        业务现金_formulas.append(formula)
+    row_map['业务现金'] = write_data_row('业务现金', [None] * len(years),
+                                      formulas=业务现金_formulas, color=COLOR_FORMULA, is_bold=True)
 
-    current_row += 1
+    current_row += 1  # 空行
 
-    # 4. 经营指标分析
-    ws.cell(current_row, 1).value = '==== 经营指标 ===='
-    ws.cell(current_row, 1).font = Font(bold=True, size=12, color='4472C4')
-    current_row += 1
+    # 第四部分：经营指标（从第71行开始）
+    write_data_row('经营周转', [None] * len(years), is_bold=True)
 
     # 毛利率
     毛利率_formulas = []
     for i in range(len(years)):
-        col = get_column_letter(3 + i)
+        col = get_column_letter(4 + i)
         毛利率_formulas.append(f"=({col}{row_map['主营收入']}-{col}{row_map['主营成本']})/{col}{row_map['主营收入']}")
-
     write_data_row('毛利率', [None] * len(years), is_percentage=True,
-                  formulas=毛利率_formulas, color=COLOR_FORMULA)
+                  formulas=毛利率_formulas, color=COLOR_FORMULA, is_bold=True)
 
     # 费率
     费率_formulas = []
     for i in range(len(years)):
-        col = get_column_letter(3 + i)
+        col = get_column_letter(4 + i)
         费率_formulas.append(f"={col}{row_map['费用']}/{col}{row_map['主营收入']}")
-
     write_data_row('费率', [None] * len(years), is_percentage=True,
-                  formulas=费率_formulas, color=COLOR_FORMULA)
+                  formulas=费率_formulas, color=COLOR_FORMULA, is_bold=True)
 
     # 研发费率
     研发费率_formulas = []
     for i in range(len(years)):
-        col = get_column_letter(3 + i)
+        col = get_column_letter(4 + i)
         研发费率_formulas.append(f"={col}{row_map['研发费用']}/{col}{row_map['主营收入']}")
-
     write_data_row('研发费率', [None] * len(years), is_percentage=True,
-                  formulas=研发费率_formulas, color=COLOR_FORMULA)
+                  formulas=研发费率_formulas, color=COLOR_FORMULA, is_bold=True)
 
     # 销售费率
     销售费率_formulas = []
     for i in range(len(years)):
-        col = get_column_letter(3 + i)
+        col = get_column_letter(4 + i)
         销售费率_formulas.append(f"={col}{row_map['销售费用']}/{col}{row_map['主营收入']}")
-
     write_data_row('销售费率', [None] * len(years), is_percentage=True,
-                  formulas=销售费率_formulas, color=COLOR_FORMULA)
+                  formulas=销售费率_formulas, color=COLOR_FORMULA, is_bold=True)
 
     # 管理费率
     管理费率_formulas = []
     for i in range(len(years)):
-        col = get_column_letter(3 + i)
+        col = get_column_letter(4 + i)
         管理费率_formulas.append(f"={col}{row_map['管理费用']}/{col}{row_map['主营收入']}")
-
     write_data_row('管理费率', [None] * len(years), is_percentage=True,
-                  formulas=管理费率_formulas, color=COLOR_FORMULA)
+                  formulas=管理费率_formulas, color=COLOR_FORMULA, is_bold=True)
 
     # 净利率
     净利率_formulas = []
     for i in range(len(years)):
-        col = get_column_letter(3 + i)
+        col = get_column_letter(4 + i)
         净利率_formulas.append(f"={col}{row_map['业务利润']}/{col}{row_map['主营收入']}")
-
     write_data_row('净利率', [None] * len(years), is_percentage=True,
-                  formulas=净利率_formulas, color=COLOR_FORMULA)
+                  formulas=净利率_formulas, color=COLOR_FORMULA, is_bold=True)
+
+    current_row += 1  # 空行
 
     # 应收占比
     应收占比_formulas = []
     for i in range(len(years)):
-        col = get_column_letter(3 + i)
+        col = get_column_letter(4 + i)
         应收占比_formulas.append(f"={col}{row_map['应收']}/{col}{row_map['主营收入']}")
-
     write_data_row('应收占比', [None] * len(years), is_percentage=True,
-                  formulas=应收占比_formulas, color=COLOR_FORMULA)
+                  formulas=应收占比_formulas, color=COLOR_FORMULA, is_bold=True)
 
     # 应收周转
     应收周转_formulas = []
     for i in range(len(years)):
-        col = get_column_letter(3 + i)
+        col = get_column_letter(4 + i)
         应收周转_formulas.append(f"={col}{row_map['主营收入']}/{col}{row_map['应收']}")
-
     write_data_row('应收周转', [None] * len(years), decimals=1,
-                  formulas=应收周转_formulas, color=COLOR_FORMULA)
+                  formulas=应收周转_formulas, color=COLOR_FORMULA, is_bold=True)
 
     # 存货周转
     存货周转_formulas = []
     for i in range(len(years)):
-        col = get_column_letter(3 + i)
+        col = get_column_letter(4 + i)
         存货周转_formulas.append(f"={col}{row_map['主营成本']}/{col}{row_map['存货']}")
-
     write_data_row('存货周转', [None] * len(years), decimals=1,
-                  formulas=存货周转_formulas, color=COLOR_FORMULA)
+                  formulas=存货周转_formulas, color=COLOR_FORMULA, is_bold=True)
+
+    # 应付（预付）占比
+    应付预付占比_formulas = []
+    for i in range(len(years)):
+        col = get_column_letter(4 + i)
+        应付预付占比_formulas.append(f"=({col}{row_map['应付']}+{col}{row_map['预付']})/{col}{row_map['主营收入']}")
+    write_data_row('应付（预付）占比', [None] * len(years), is_percentage=True,
+                  formulas=应付预付占比_formulas, color=COLOR_FORMULA, is_bold=True)
 
     # 预收占比
     预收占比_formulas = []
     for i in range(len(years)):
-        col = get_column_letter(3 + i)
+        col = get_column_letter(4 + i)
         预收占比_formulas.append(f"={col}{row_map['预收']}/{col}{row_map['主营收入']}")
-
     write_data_row('预收占比', [None] * len(years), is_percentage=True,
-                  formulas=预收占比_formulas, color=COLOR_FORMULA)
+                  formulas=预收占比_formulas, color=COLOR_FORMULA, is_bold=True)
 
-    current_row += 1
-
-    # 5. 资产负债结构
-    ws.cell(current_row, 1).value = '==== 资产负债结构 ===='
-    ws.cell(current_row, 1).font = Font(bold=True, size=12, color='4472C4')
-    current_row += 1
-
-    # 现金资产占比
-    现金资产占比_formulas = []
+    # 利息支出/业务利润
+    利息业务利润比_formulas = []
     for i in range(len(years)):
-        col = get_column_letter(3 + i)
-        现金资产占比_formulas.append(f"={col}{row_map['现金']}/{col}{row_map['资产']}")
+        col = get_column_letter(4 + i)
+        利息业务利润比_formulas.append(f"={col}{row_map['利息支出']}/{col}{row_map['业务利润']}")
+    write_data_row('利息支出/业务利润', [None] * len(years), is_percentage=True,
+                  formulas=利息业务利润比_formulas, color=COLOR_FORMULA, is_bold=True)
 
-    write_data_row('现金资产占比', [None] * len(years), is_percentage=True,
-                  formulas=现金资产占比_formulas, color=COLOR_FORMULA)
-
-    # 股权资产占比
-    股权资产占比_formulas = []
+    # 折旧摊销/长期资产
+    折旧长期资产比_formulas = []
     for i in range(len(years)):
-        col = get_column_letter(3 + i)
-        股权资产占比_formulas.append(f"={col}{row_map['投资']}/{col}{row_map['资产']}")
+        col = get_column_letter(4 + i)
+        折旧长期资产比_formulas.append(f"={col}{row_map['折旧摊销']}/{col}{row_map['长期资产']}")
+    write_data_row('折旧摊销/长期资产', [None] * len(years), is_percentage=True,
+                  formulas=折旧长期资产比_formulas, color=COLOR_FORMULA, is_bold=True)
 
-    write_data_row('股权资产占比', [None] * len(years), is_percentage=True,
-                  formulas=股权资产占比_formulas, color=COLOR_FORMULA)
+    current_row += 1  # 空行
 
-    # 经营资产占比
-    经营资产占比_formulas = []
+    # 第五部分：资产负债结构（从第87行开始）
+    write_data_row('资产结构', [None] * len(years), is_bold=True)
+
+    # 现金资产
+    现金资产_formulas = []
     for i in range(len(years)):
-        col = get_column_letter(3 + i)
-        经营资产占比_formulas.append(f"={col}{row_map['运营资产']}/{col}{row_map['资产']}")
+        col = get_column_letter(4 + i)
+        现金资产_formulas.append(f"={col}{row_map['现金']}/{col}{row_map['资产']}")
+    write_data_row('现金资产', [None] * len(years), is_percentage=True,
+                  formulas=现金资产_formulas, color=COLOR_FORMULA, is_bold=True)
 
-    write_data_row('经营资产占比', [None] * len(years), is_percentage=True,
-                  formulas=经营资产占比_formulas, color=COLOR_FORMULA)
-
-    # 长期资产占比
-    长期资产占比_formulas = []
+    # 股权资产
+    股权资产_formulas = []
     for i in range(len(years)):
-        col = get_column_letter(3 + i)
-        长期资产占比_formulas.append(f"={col}{row_map['长期资产']}/{col}{row_map['资产']}")
+        col = get_column_letter(4 + i)
+        股权资产_formulas.append(f"={col}{row_map['投资']}/{col}{row_map['资产']}")
+    write_data_row('股权资产', [None] * len(years), is_percentage=True,
+                  formulas=股权资产_formulas, color=COLOR_FORMULA, is_bold=True)
 
-    write_data_row('长期资产占比', [None] * len(years), is_percentage=True,
-                  formulas=长期资产占比_formulas, color=COLOR_FORMULA)
-
-    # 经营负债占比
-    经营负债占比_formulas = []
+    # 经营资产
+    经营资产_formulas = []
     for i in range(len(years)):
-        col = get_column_letter(3 + i)
-        经营负债占比_formulas.append(f"=({col}{row_map['预收']}+{col}{row_map['应付']})/{col}{row_map['负债']}")
+        col = get_column_letter(4 + i)
+        经营资产_formulas.append(f"={col}{row_map['运营资产']}/{col}{row_map['资产']}")
+    write_data_row('经营资产', [None] * len(years), is_percentage=True,
+                  formulas=经营资产_formulas, color=COLOR_FORMULA, is_bold=True)
 
-    write_data_row('经营负债占比', [None] * len(years), is_percentage=True,
-                  formulas=经营负债占比_formulas, color=COLOR_FORMULA)
-
-    # 有息负债占比
-    有息负债占比_formulas = []
+    # 长期资产
+    长期资产_formulas = []
     for i in range(len(years)):
-        col = get_column_letter(3 + i)
-        有息负债占比_formulas.append(f"={col}{row_map['有息负债']}/{col}{row_map['负债']}")
+        col = get_column_letter(4 + i)
+        长期资产_formulas.append(f"={col}{row_map['长期资产']}/{col}{row_map['资产']}")
+    write_data_row('长期资产', [None] * len(years), is_percentage=True,
+                  formulas=长期资产_formulas, color=COLOR_FORMULA, is_bold=True)
 
-    write_data_row('有息负债占比', [None] * len(years), is_percentage=True,
-                  formulas=有息负债占比_formulas, color=COLOR_FORMULA)
+    # 负债结构
+    write_data_row('负债结构', [None] * len(years), is_bold=True)
 
-    # 资本投入占比
-    资本投入占比_formulas = []
+    # 经营负债
+    经营负债_formulas = []
     for i in range(len(years)):
-        col = get_column_letter(3 + i)
-        资本投入占比_formulas.append(f"={col}{row_map['资本投入']}/{col}{row_map['权益']}")
+        col = get_column_letter(4 + i)
+        经营负债_formulas.append(f"=({col}{row_map['预收']}+{col}{row_map['应付']})/{col}{row_map['负债']}")
+    write_data_row('经营负债', [None] * len(years), is_percentage=True,
+                  formulas=经营负债_formulas, color=COLOR_FORMULA, is_bold=True)
 
-    write_data_row('资本投入占比', [None] * len(years), is_percentage=True,
-                  formulas=资本投入占比_formulas, color=COLOR_FORMULA)
-
-    # 利润留存占比
-    利润留存占比_formulas = []
+    # 有息负债
+    有息负债_formulas = []
     for i in range(len(years)):
-        col = get_column_letter(3 + i)
-        利润留存占比_formulas.append(f"={col}{row_map['未分配利润']}/{col}{row_map['权益']}")
+        col = get_column_letter(4 + i)
+        有息负债_formulas.append(f"={col}{row_map['有息负债']}/{col}{row_map['负债']}")
+    write_data_row('有息负债', [None] * len(years), is_percentage=True,
+                  formulas=有息负债_formulas, color=COLOR_FORMULA, is_bold=True)
 
-    write_data_row('利润留存占比', [None] * len(years), is_percentage=True,
-                  formulas=利润留存占比_formulas, color=COLOR_FORMULA)
+    # 权益结构
+    write_data_row('权益结构', [None] * len(years), is_bold=True)
 
-    current_row += 1
+    # 资本投入
+    资本投入_formulas = []
+    for i in range(len(years)):
+        col = get_column_letter(4 + i)
+        资本投入_formulas.append(f"={col}{row_map['资本投入']}/{col}{row_map['权益']}")
+    write_data_row('资本投入', [None] * len(years), is_percentage=True,
+                  formulas=资本投入_formulas, color=COLOR_FORMULA, is_bold=True)
 
-    # 6. 同比增长分析 (YoY)
-    ws.cell(current_row, 1).value = '==== 同比增长分析 (YoY) ===='
-    ws.cell(current_row, 1).font = Font(bold=True, size=12, color='4472C4')
-    current_row += 1
+    # 利润留存
+    利润留存_权益_formulas = []
+    for i in range(len(years)):
+        col = get_column_letter(4 + i)
+        利润留存_权益_formulas.append(f"={col}{row_map['未分配利润']}/{col}{row_map['权益']}")
+    write_data_row('利润留存', [None] * len(years), is_percentage=True,
+                  formulas=利润留存_权益_formulas, color=COLOR_FORMULA, is_bold=True)
+
+    current_row += 1  # 空行
+
+    # 第六部分：同比增长分析（从第99行开始）
 
     # 营收YoY
     营收YoY_formulas = []
@@ -540,12 +611,11 @@ def create_beta04_analysis_v22(source_file, output_file):
         if i == len(years) - 1:  # 最早年份没有YoY
             营收YoY_formulas.append(None)
         else:
-            this_col = get_column_letter(3 + i)
-            prev_col = get_column_letter(3 + i + 1)
+            this_col = get_column_letter(4 + i)
+            prev_col = get_column_letter(4 + i + 1)
             营收YoY_formulas.append(f"=({this_col}{row_map['主营收入']}-{prev_col}{row_map['主营收入']})/{prev_col}{row_map['主营收入']}")
-
-    write_data_row('营收 YoY', [None] * len(years), is_percentage=True,
-                  formulas=营收YoY_formulas, color=COLOR_FORMULA)
+    write_data_row('营收YoY', [None] * len(years), is_percentage=True,
+                  formulas=营收YoY_formulas, color=COLOR_FORMULA, is_bold=True)
 
     # 业务净利润YoY
     业务净利润YoY_formulas = []
@@ -553,12 +623,13 @@ def create_beta04_analysis_v22(source_file, output_file):
         if i == len(years) - 1:  # 最早年份没有YoY
             业务净利润YoY_formulas.append(None)
         else:
-            this_col = get_column_letter(3 + i)
-            prev_col = get_column_letter(3 + i + 1)
+            this_col = get_column_letter(4 + i)
+            prev_col = get_column_letter(4 + i + 1)
             业务净利润YoY_formulas.append(f"=({this_col}{row_map['业务利润']}-{prev_col}{row_map['业务利润']})/{prev_col}{row_map['业务利润']}")
+    write_data_row('业务净利润YoY', [None] * len(years), is_percentage=True,
+                  formulas=业务净利润YoY_formulas, color=COLOR_FORMULA, is_bold=True)
 
-    write_data_row('业务净利润 YoY', [None] * len(years), is_percentage=True,
-                  formulas=业务净利润YoY_formulas, color=COLOR_FORMULA)
+    current_row += 1  # 空行
 
     # 资产YoY
     资产YoY_formulas = []
@@ -566,109 +637,256 @@ def create_beta04_analysis_v22(source_file, output_file):
         if i == len(years) - 1:  # 最早年份没有YoY
             资产YoY_formulas.append(None)
         else:
-            this_col = get_column_letter(3 + i)
-            prev_col = get_column_letter(3 + i + 1)
+            this_col = get_column_letter(4 + i)
+            prev_col = get_column_letter(4 + i + 1)
             资产YoY_formulas.append(f"=({this_col}{row_map['资产']}-{prev_col}{row_map['资产']})/{prev_col}{row_map['资产']}")
+    write_data_row('资产YoY', [None] * len(years), is_percentage=True,
+                  formulas=资产YoY_formulas, color=COLOR_FORMULA, is_bold=True)
 
-    write_data_row('资产 YoY', [None] * len(years), is_percentage=True,
-                  formulas=资产YoY_formulas, color=COLOR_FORMULA)
+    # 现金YoY
+    现金YoY_formulas = []
+    for i in range(len(years)):
+        if i == len(years) - 1:
+            现金YoY_formulas.append(None)
+        else:
+            this_col = get_column_letter(4 + i)
+            prev_col = get_column_letter(4 + i + 1)
+            现金YoY_formulas.append(f"=({this_col}{row_map['现金']}-{prev_col}{row_map['现金']})/{prev_col}{row_map['现金']}")
+    write_data_row('现金', [None] * len(years), is_percentage=True,
+                  formulas=现金YoY_formulas, color=COLOR_FORMULA)
+
+    # 投资YoY
+    投资YoY_formulas = []
+    for i in range(len(years)):
+        if i == len(years) - 1:
+            投资YoY_formulas.append(None)
+        else:
+            this_col = get_column_letter(4 + i)
+            prev_col = get_column_letter(4 + i + 1)
+            投资YoY_formulas.append(f"=({this_col}{row_map['投资']}-{prev_col}{row_map['投资']})/{prev_col}{row_map['投资']}")
+    write_data_row('投资', [None] * len(years), is_percentage=True,
+                  formulas=投资YoY_formulas, color=COLOR_FORMULA)
+
+    # 运营资产YoY
+    运营资产YoY_formulas = []
+    for i in range(len(years)):
+        if i == len(years) - 1:
+            运营资产YoY_formulas.append(None)
+        else:
+            this_col = get_column_letter(4 + i)
+            prev_col = get_column_letter(4 + i + 1)
+            运营资产YoY_formulas.append(f"=({this_col}{row_map['运营资产']}-{prev_col}{row_map['运营资产']})/{prev_col}{row_map['运营资产']}")
+    write_data_row('运营资产', [None] * len(years), is_percentage=True,
+                  formulas=运营资产YoY_formulas, color=COLOR_FORMULA)
+
+    # 长期资产YoY
+    长期资产YoY_formulas = []
+    for i in range(len(years)):
+        if i == len(years) - 1:
+            长期资产YoY_formulas.append(None)
+        else:
+            this_col = get_column_letter(4 + i)
+            prev_col = get_column_letter(4 + i + 1)
+            长期资产YoY_formulas.append(f"=({this_col}{row_map['长期资产']}-{prev_col}{row_map['长期资产']})/{prev_col}{row_map['长期资产']}")
+    write_data_row('长期资产', [None] * len(years), is_percentage=True,
+                  formulas=长期资产YoY_formulas, color=COLOR_FORMULA)
 
     # 权益YoY
     权益YoY_formulas = []
     for i in range(len(years)):
-        if i == len(years) - 1:  # 最早年份没有YoY
+        if i == len(years) - 1:
             权益YoY_formulas.append(None)
         else:
-            this_col = get_column_letter(3 + i)
-            prev_col = get_column_letter(3 + i + 1)
+            this_col = get_column_letter(4 + i)
+            prev_col = get_column_letter(4 + i + 1)
             权益YoY_formulas.append(f"=({this_col}{row_map['权益']}-{prev_col}{row_map['权益']})/{prev_col}{row_map['权益']}")
+    write_data_row('权益YoY', [None] * len(years), is_percentage=True,
+                  formulas=权益YoY_formulas, color=COLOR_FORMULA, is_bold=True)
 
-    write_data_row('权益 YoY', [None] * len(years), is_percentage=True,
-                  formulas=权益YoY_formulas, color=COLOR_FORMULA)
+    # 资本投入YoY
+    资本投入YoY_formulas = []
+    for i in range(len(years)):
+        if i == len(years) - 1:
+            资本投入YoY_formulas.append(None)
+        else:
+            this_col = get_column_letter(4 + i)
+            prev_col = get_column_letter(4 + i + 1)
+            资本投入YoY_formulas.append(f"=({this_col}{row_map['资本投入']}-{prev_col}{row_map['资本投入']})/{prev_col}{row_map['资本投入']}")
+    write_data_row('资本投入', [None] * len(years), is_percentage=True,
+                  formulas=资本投入YoY_formulas, color=COLOR_FORMULA)
 
-    current_row += 1
+    # 未分配利润YoY
+    未分配利润YoY_formulas = []
+    for i in range(len(years)):
+        if i == len(years) - 1:
+            未分配利润YoY_formulas.append(None)
+        else:
+            this_col = get_column_letter(4 + i)
+            prev_col = get_column_letter(4 + i + 1)
+            未分配利润YoY_formulas.append(f"=({this_col}{row_map['未分配利润']}-{prev_col}{row_map['未分配利润']})/{prev_col}{row_map['未分配利润']}")
+    write_data_row('未分配利润', [None] * len(years), is_percentage=True,
+                  formulas=未分配利润YoY_formulas, color=COLOR_FORMULA)
 
-    # 7. ROE分解（杜邦分析）
-    ws.cell(current_row, 1).value = '==== ROE 分解（杜邦分析） ===='
-    ws.cell(current_row, 1).font = Font(bold=True, size=12, color='4472C4')
-    current_row += 1
+    # 负债YoY
+    负债YoY_formulas = []
+    for i in range(len(years)):
+        if i == len(years) - 1:
+            负债YoY_formulas.append(None)
+        else:
+            this_col = get_column_letter(4 + i)
+            prev_col = get_column_letter(4 + i + 1)
+            负债YoY_formulas.append(f"=({this_col}{row_map['负债']}-{prev_col}{row_map['负债']})/{prev_col}{row_map['负债']}")
+    write_data_row('负债YoY', [None] * len(years), is_percentage=True,
+                  formulas=负债YoY_formulas, color=COLOR_FORMULA, is_bold=True)
+
+    # 预收YoY
+    预收YoY_formulas = []
+    for i in range(len(years)):
+        if i == len(years) - 1:
+            预收YoY_formulas.append(None)
+        else:
+            this_col = get_column_letter(4 + i)
+            prev_col = get_column_letter(4 + i + 1)
+            预收YoY_formulas.append(f"=({this_col}{row_map['预收']}-{prev_col}{row_map['预收']})/{prev_col}{row_map['预收']}")
+    write_data_row('预收', [None] * len(years), is_percentage=True,
+                  formulas=预收YoY_formulas, color=COLOR_FORMULA)
+
+    # 应付YoY
+    应付YoY_formulas = []
+    for i in range(len(years)):
+        if i == len(years) - 1:
+            应付YoY_formulas.append(None)
+        else:
+            this_col = get_column_letter(4 + i)
+            prev_col = get_column_letter(4 + i + 1)
+            应付YoY_formulas.append(f"=({this_col}{row_map['应付']}-{prev_col}{row_map['应付']})/{prev_col}{row_map['应付']}")
+    write_data_row('应付', [None] * len(years), is_percentage=True,
+                  formulas=应付YoY_formulas, color=COLOR_FORMULA)
+
+    # 有息债务YoY
+    有息债务YoY_formulas = []
+    for i in range(len(years)):
+        if i == len(years) - 1:
+            有息债务YoY_formulas.append(None)
+        else:
+            this_col = get_column_letter(4 + i)
+            prev_col = get_column_letter(4 + i + 1)
+            有息债务YoY_formulas.append(f"=({this_col}{row_map['有息负债']}-{prev_col}{row_map['有息负债']})/{prev_col}{row_map['有息负债']}")
+    write_data_row('有息债务', [None] * len(years), is_percentage=True,
+                  formulas=有息债务YoY_formulas, color=COLOR_FORMULA)
+
+    current_row += 1  # 空行
+
+    # 第七部分：ROE分解（从第115行开始）
 
     # ROE
     ROE_formulas = []
     for i in range(len(years)):
-        col = get_column_letter(3 + i)
+        col = get_column_letter(4 + i)
         ROE_formulas.append(f"={col}{row_map['业务利润']}/{col}{row_map['权益']}")
-
     write_data_row('ROE', [None] * len(years), is_percentage=True,
-                  formulas=ROE_formulas, color=COLOR_FORMULA)
+                  formulas=ROE_formulas, color=COLOR_FORMULA, is_bold=True)
 
-    # 净利率（杜邦分析）
-    净利率杜邦_formulas = []
+    # Net Profit（净利率）
+    净利率_ROE_formulas = []
     for i in range(len(years)):
-        col = get_column_letter(3 + i)
-        净利率杜邦_formulas.append(f"={col}{row_map['业务利润']}/{col}{row_map['主营收入']}")
+        col = get_column_letter(4 + i)
+        净利率_ROE_formulas.append(f"={col}{row_map['业务利润']}/{col}{row_map['主营收入']}")
+    write_data_row('Net Proit', [None] * len(years), is_percentage=True,
+                  formulas=净利率_ROE_formulas, color=COLOR_FORMULA)
 
-    write_data_row('净利率', [None] * len(years), is_percentage=True,
-                  formulas=净利率杜邦_formulas, color=COLOR_FORMULA)
-
-    # 资产周转率
-    资产周转率_formulas = []
+    # 主营收入/资产（资产周转率）
+    资产周转率_ROE_formulas = []
     for i in range(len(years)):
-        col = get_column_letter(3 + i)
-        资产周转率_formulas.append(f"={col}{row_map['主营收入']}/{col}{row_map['资产']}")
+        col = get_column_letter(4 + i)
+        资产周转率_ROE_formulas.append(f"={col}{row_map['主营收入']}/{col}{row_map['资产']}")
+    write_data_row('主营收入/资产', [None] * len(years), decimals=2,
+                  formulas=资产周转率_ROE_formulas, color=COLOR_FORMULA)
 
-    write_data_row('资产周转率', [None] * len(years), decimals=2,
-                  formulas=资产周转率_formulas, color=COLOR_FORMULA)
-
-    # 权益乘数
-    权益乘数_formulas = []
+    # 资产/资本（权益乘数）
+    权益乘数_ROE_formulas = []
     for i in range(len(years)):
-        col = get_column_letter(3 + i)
-        权益乘数_formulas.append(f"={col}{row_map['资产']}/{col}{row_map['权益']}")
+        col = get_column_letter(4 + i)
+        权益乘数_ROE_formulas.append(f"={col}{row_map['资产']}/{col}{row_map['权益']}")
+    write_data_row('资产/资本', [None] * len(years), decimals=2,
+                  formulas=权益乘数_ROE_formulas, color=COLOR_FORMULA)
 
-    write_data_row('权益乘数', [None] * len(years), decimals=2,
-                  formulas=权益乘数_formulas, color=COLOR_FORMULA)
+    current_row += 1  # 空行
 
-    current_row += 1
-
-    # 8. 估值指标
-    ws.cell(current_row, 1).value = '==== 估值指标 ===='
-    ws.cell(current_row, 1).font = Font(bold=True, size=12, color='4472C4')
-    current_row += 1
-
-    # DPS（每股股息）
-    DPS_formulas = []
-    for i in range(len(years)):
-        col = get_column_letter(3 + i)
-        DPS_formulas.append(f"={col}{row_map['股息分红']}/{col}{row_map['股本']}")
-
-    write_data_row('DPS（每股股息）', [None] * len(years), decimals=2,
-                  formulas=DPS_formulas, color=COLOR_FORMULA)
+    # 第八部分：估值指标（从第120行开始）
+    write_data_row('股息', [None] * len(years), is_bold=True)
 
     # EPS（每股收益）
     EPS_formulas = []
     for i in range(len(years)):
-        col = get_column_letter(3 + i)
+        col = get_column_letter(4 + i)
         EPS_formulas.append(f"={col}{row_map['业务利润']}/{col}{row_map['股本']}")
-
-    write_data_row('EPS（每股收益）', [None] * len(years), decimals=2,
-                  formulas=EPS_formulas, color=COLOR_FORMULA)
+    write_data_row('EPS', [None] * len(years), decimals=2,
+                  formulas=EPS_formulas, color=COLOR_FORMULA, is_bold=True)
 
     # FPS（每股自由现金流）
     FPS_formulas = []
     for i in range(len(years)):
-        col = get_column_letter(3 + i)
-        FPS_formulas.append(f"={col}{row_map['自由现金流']}/{col}{row_map['股本']}")
+        col = get_column_letter(4 + i)
+        FPS_formulas.append(f"={col}{row_map['业务现金']}/{col}{row_map['股本']}")
+    write_data_row('FPS', [None] * len(years), decimals=2,
+                  formulas=FPS_formulas, color=COLOR_FORMULA, is_bold=True)
 
-    write_data_row('FPS（每股自由现金流）', [None] * len(years), decimals=2,
-                  formulas=FPS_formulas, color=COLOR_FORMULA)
+    current_row += 1  # 空行
 
     # 手动输入股价（年度最高价和最低价）
-    write_data_row('年度最高价', [None] * len(years), decimals=2, is_input=True, color=COLOR_INPUT)
-    write_data_row('年度最低价', [None] * len(years), decimals=2, is_input=True, color=COLOR_INPUT)
+    row_map['价格H'] = write_data_row('价格（H）', [None] * len(years), decimals=2, is_input=True, color=COLOR_INPUT, is_bold=True)
+    row_map['价格L'] = write_data_row('价格（L）', [None] * len(years), decimals=2, is_input=True, color=COLOR_INPUT, is_bold=True)
 
-    # PE和股息率会根据输入的股价自动计算
-    # 这里可以添加PE和股息率的公式，但需要引用上面的手动输入行
+    # PE（高）
+    PE_H_formulas = []
+    for i in range(len(years)):
+        col = get_column_letter(4 + i)
+        PE_H_formulas.append(f"={col}{row_map['价格H']}/({col}{row_map['业务利润']}/{col}{row_map['股本']})")
+    write_data_row('PE', [None] * len(years), decimals=2,
+                  formulas=PE_H_formulas, color=COLOR_FORMULA, is_bold=True)
+
+    # PE（低）
+    PE_L_formulas = []
+    for i in range(len(years)):
+        col = get_column_letter(4 + i)
+        PE_L_formulas.append(f"={col}{row_map['价格L']}/({col}{row_map['业务利润']}/{col}{row_map['股本']})")
+    write_data_row('PE', [None] * len(years), decimals=2,
+                  formulas=PE_L_formulas, color=COLOR_FORMULA, is_bold=True)
+
+    # 股息率（高）
+    股息率_H_formulas = []
+    for i in range(len(years)):
+        col = get_column_letter(4 + i)
+        股息率_H_formulas.append(f"=({col}{row_map['股息分红']}/{col}{row_map['股本']})/{col}{row_map['价格H']}")
+    write_data_row('股息率', [None] * len(years), is_percentage=True,
+                  formulas=股息率_H_formulas, color=COLOR_FORMULA, is_bold=True)
+
+    # 股息率（低）
+    股息率_L_formulas = []
+    for i in range(len(years)):
+        col = get_column_letter(4 + i)
+        股息率_L_formulas.append(f"=({col}{row_map['股息分红']}/{col}{row_map['股本']})/{col}{row_map['价格L']}")
+    write_data_row('股息率', [None] * len(years), is_percentage=True,
+                  formulas=股息率_L_formulas, color=COLOR_FORMULA, is_bold=True)
+
+    current_row += 2  # 两个空行
+
+    # 市值（高）
+    市值_H_formulas = []
+    for i in range(len(years)):
+        col = get_column_letter(4 + i)
+        市值_H_formulas.append(f"={col}{row_map['价格H']}*{col}{row_map['股本']}")
+    write_data_row('市值', [None] * len(years), decimals=0,
+                  formulas=市值_H_formulas, color=COLOR_FORMULA, is_bold=True)
+
+    # 市值（低）
+    市值_L_formulas = []
+    for i in range(len(years)):
+        col = get_column_letter(4 + i)
+        市值_L_formulas.append(f"={col}{row_map['价格L']}*{col}{row_map['股本']}")
+    write_data_row('市值', [None] * len(years), decimals=0,
+                  formulas=市值_L_formulas, color=COLOR_FORMULA, is_bold=True)
 
     # 保存文件
     print(f"\n保存文件: {output_file}")
