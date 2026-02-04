@@ -18,19 +18,19 @@ financial_analysis_agent/
 ├── Agents.md                        # 入口：Agent协作文档（推荐首先阅读）
 ├── README.md                        # 本文件：用户使用指南
 │
-├── generate_beta04_v2.py            # 核心：分析表生成器（推荐使用）
-├── subject_mapping.py               # 科目映射工具（V2.2）
+├── generate_beta04_v22.py           # 核心：V2.2分析表生成器（推荐使用）
+├── subject_mapping.py               # 动态科目映射工具
+├── subject_mapping_config.json      # JSON配置文件：科目映射规则
+├── subject_validator_v22.py         # V2.2科目完整性验证器
 ├── requirements.txt                 # Python依赖包列表
 ├── .gitignore                       # Git忽略文件配置
 │
 ├── venv/                            # Python虚拟环境（不提交到Git）
 │
-├── examples/                        # 示例文件
-│   ├── 福耀玻璃.xlsx                  # 示例：原始财务数据
-│   └── 福耀玻璃_Beta04_完整分析.xlsx    # 输出：完整的 Beta_04 分析表
-│
-└── docs/                            # 文档目录
-    └── Beta_04配置手册.md            # 科目映射规则和财务分析公式（V2.2）
+└── examples/                        # 示例文件
+    ├── 福耀玻璃.xlsx                  # 示例：原始财务数据
+    ├── 金山办公.xlsx                  # 示例：原始财务数据
+    └── 福耀玻璃_Beta04_完整分析.xlsx    # 输出：完整的 Beta_04 分析表
 ```
 
 ## 🚀 快速开始
@@ -78,13 +78,13 @@ source venv/bin/activate  # macOS/Linux
 **运行程序**：
 ```bash
 # 使用默认文件（examples/福耀玻璃.xlsx）
-python3 generate_beta04_v2.py
+python3 generate_beta04_v22.py
 
 # 指定输入文件
-python3 generate_beta04_v2.py 你的公司.xlsx
+python3 generate_beta04_v22.py 你的公司.xlsx
 
 # 指定输入和输出文件
-python3 generate_beta04_v2.py 输入.xlsx 输出.xlsx
+python3 generate_beta04_v22.py 输入.xlsx 输出.xlsx
 ```
 
 ### 3. 查看结果
@@ -220,43 +220,148 @@ ROE = 净利率 × 资产周转率 × 权益乘数
 
 ## 🛠️ 适配其他公司
 
-### 方式1：统一数据格式（推荐 - V2.2开发中）
+### 🚀 方式1：动态科目识别（V2.2推荐）
 使用标准科目名称，系统自动识别数据位置：
 
 **步骤**：
-1. 参考 `docs/Beta_04配置手册.md` 了解科目映射规则
-2. 在Excel中使用标准科目名称
-3. 运行科目映射验证：
+1. 检查科目映射配置：
+   ```bash
+   python3 subject_mapping.py --config-info
+   ```
+
+2. 分析你的Excel文件，查看科目映射情况：
    ```bash
    python3 subject_mapping.py 你的公司.xlsx
    ```
-4. 生成分析表（V2.2开发中）
+
+3. 运行科目完整性验证：
+   ```bash
+   python3 subject_validator_v22.py 你的公司.xlsx
+   ```
+
+4. 生成分析表：
+   ```bash
+   python3 generate_beta04_v22.py 你的公司.xlsx
+   ```
 
 **优势**：
-- ✅ 科目可以在任意行
-- ✅ 支持科目别名（如"货币资金"→"现金"）
-- ✅ 无需修改代码
+- ✅ 科目可以在任意行，系统自动查找
+- ✅ 支持科目别名（如"货币资金"→"现金及现金等价物"）
+- ✅ 无需修改代码，纯配置驱动
+- ✅ 支持复合科目（如"有息负债"=短期借款+长期借款）
 
-### 方式2：调整数据格式（当前 - V2.1）
-将你的数据整理成与 `examples/福耀玻璃.xlsx` 相同的格式
+### 🔧 科目配置管理
 
-### 方式3：修改脚本映射（不推荐）
-在 `generate_beta04_v2.py` 中修改行号映射：
-
-```python
-# 找到这部分代码（约在第192行）
-data[year]['资产'] = get_balance_value(2, balance_col)  # 第2行
-
-# 如果你的"资产"在第3行，改为：
-data[year]['资产'] = get_balance_value(3, balance_col)  # 第3行
+**查看当前配置**：
+```bash
+python3 subject_mapping.py --config-info
 ```
 
-**注意**：不同工作表的列索引不同：
-- balance表：使用 `balance_col`
-- 损益现金流表：使用 `income_col`
-- 收入成本表：使用 `revenue_col`
+**添加新的科目别名**：
+```bash
+# 为"货币资金"添加新别名"现金资产"
+python3 subject_mapping.py --add-alias balance 货币资金 现金资产
 
-详见 [docs/Beta_04配置手册.md](./docs/Beta_04配置手册.md) 的科目映射规则部分。
+# 为"研发费用"添加新别名"R&D费用"
+python3 subject_mapping.py --add-alias income 研发费用 R&D费用
+```
+
+### 📄 方式2：调整数据格式
+将你的数据整理成与 `examples/福耀玻璃.xlsx` 相同的格式
+
+---
+
+## ⚙️ JSON 配置文件详解
+
+### 📋 subject_mapping_config.json 结构
+
+配置文件采用分层结构，包含以下主要部分：
+
+```json
+{
+  "meta": {                           // 元信息
+    "version": "2.2.0",
+    "description": "Beta_04 财务分析系统科目映射配置",
+    "last_updated": "2026-02-03"
+  },
+
+  "balance_mapping": {                // 资产负债表科目映射
+    "subjects": {
+      "资产": {
+        "aliases": ["资产", "资产总计", "总资产"],
+        "description": "资产合计"
+      }
+    }
+  },
+
+  "income_mapping": {                 // 损益现金流表科目映射
+    "subjects": { /* ... */ }
+  },
+
+  "revenue_mapping": {                // 收入成本表科目映射
+    "subjects": { /* ... */ }
+  },
+
+  "composite_mapping": {              // 复合科目（需汇总多个科目）
+    "subjects": {
+      "折旧摊销": {
+        "components": ["固定资产折旧", "使用权资产折旧", "无形资产摊销"],
+        "description": "折旧摊销合计"
+      }
+    }
+  },
+
+  "beta04_field_mapping": {           // Beta_04字段与源数据映射关系
+    "balance": { /* ... */ },
+    "income": { /* ... */ },
+    "revenue": { /* ... */ }
+  },
+
+  "validation_rules": {               // 验证规则
+    "core_subjects": {                // 核心必需科目
+      "balance": ["资产", "负债", "所有者权益"],
+      "income": ["销售费用", "管理费用", "研发费用"],
+      "revenue": ["主营业务收入", "主营业务成本"]
+    }
+  }
+}
+```
+
+### 🔧 配置维护方法
+
+**1. 查看配置信息**：
+```bash
+python3 subject_mapping.py --config-info
+```
+
+**2. 添加科目别名**：
+```bash
+# 语法：mapping_type = balance | income | revenue
+python3 subject_mapping.py --add-alias <mapping_type> <subject> <alias>
+
+# 示例：
+python3 subject_mapping.py --add-alias balance 货币资金 银行存款
+python3 subject_mapping.py --add-alias income 研发费用 研发支出
+```
+
+**3. 手动编辑配置文件**：
+- 直接编辑 `subject_mapping_config.json`
+- 修改后会自动加载新配置
+- 支持添加新科目、别名、复合科目规则
+
+**4. 验证配置有效性**：
+```bash
+# 测试配置是否能正确识别科目
+python3 subject_mapping.py 测试文件.xlsx
+```
+
+### 📊 配置文件特点
+
+- **结构化**：JSON格式，层次清晰，易于理解
+- **灵活性**：支持多个别名、复合科目、验证规则
+- **可扩展**：容易添加新科目和映射规则
+- **版本管理**：包含元信息，便于版本控制
+- **向后兼容**：保持与现有代码的兼容性
 
 ## 📚 文档说明
 
@@ -265,19 +370,20 @@ data[year]['资产'] = get_balance_value(3, balance_col)  # 第3行
 - 项目概览和快速开始
 - 核心功能和技术实现
 - 所有已修复的问题列表
-- 科目动态识别方案（新增）
+- V2.2动态科目识别详解
 - 使用示例和验证方法
 - Agent协作指南
 
 **适合**：其他Agent快速了解项目全貌
 
-### [docs/Beta_04配置手册.md](./docs/Beta_04配置手册.md) 🆕
-**配置手册文档**，包含：
-- 科目映射规则：Beta_04 字段与原始数据表的映射关系
-- 财务分析公式：所有计算指标的公式和逻辑
-- 数据准备步骤和验证清单
+### [subject_mapping_config.json](./subject_mapping_config.json) 🆕
+**JSON配置文件**，包含：
+- 科目映射规则：支持多别名、复合科目
+- Beta_04字段映射：分析表与源数据的对应关系
+- 验证规则：核心必需科目和可选科目
+- 元信息：版本、更新时间等
 
-**适合**：准备数据、理解映射规则、验证计算逻辑
+**适合**：配置科目映射、理解数据提取逻辑
 
 ## 🔥 示例：福耀玻璃 2024 年分析
 
@@ -309,14 +415,15 @@ ROE 20.1% = 净利率 18.5% × 资产周转率 0.61 × 权益乘数 1.77
 
 ## 🔄 版本历史
 
-### V2.2（开发中 - 科目动态识别）
-- 🚧 通过科目名称动态查找数据位置
-- 🚧 支持不同公司的数据结构
-- ✅ 创建 Beta_04 配置手册文档
-- ✅ 创建科目映射工具
-- ✅ 测试验证通过
+### V2.2（当前版本 - 2026-02-04）
+- ✅ 实现动态科目识别，支持不同公司数据结构
+- ✅ 科目映射规则迁移至JSON配置文件
+- ✅ 支持科目别名和复合科目自动汇总
+- ✅ 添加科目完整性验证，防止生成不完整分析
+- ✅ 完整的配置管理工具和命令行接口
+- ✅ 清理项目结构，移除过时文档
 
-### V2.1（当前版本 - 2026-02-03）
+### V2.1（2026-02-03）
 - ✅ 修复数据提取列索引错误（主营收入等数据）
 - ✅ 修复盈利结构分析混用公式和数值问题
 - ✅ 业务利润公式改为纯引用，无硬编码数值
@@ -362,8 +469,8 @@ ROE 20.1% = 净利率 18.5% × 资产周转率 0.61 × 权益乘数 1.77
 
 ---
 
-**最后更新**：2026-02-03
-**版本**：V2.1
+**最后更新**：2026-02-04
+**版本**：V2.2
 **适用于**：A股、港股上市公司财务分析
 
 ---
@@ -372,10 +479,13 @@ ROE 20.1% = 净利率 18.5% × 资产周转率 0.61 × 权益乘数 1.77
 
 ```bash
 # 1. 准备你的财务数据（参考福耀玻璃.xlsx）
-# 2. 运行分析
-python3 generate_beta04_v2.py 你的公司.xlsx
+# 2. 验证科目映射（可选）
+python3 subject_validator_v22.py 你的公司.xlsx
 
-# 3. 打开生成的 Excel 文件，开始分析！
+# 3. 运行分析
+python3 generate_beta04_v22.py 你的公司.xlsx
+
+# 4. 打开生成的 Excel 文件，开始分析！
 ```
 
 **就是这么简单！** 🎉

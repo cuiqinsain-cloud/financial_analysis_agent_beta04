@@ -1,9 +1,9 @@
 # Beta_04 财务分析工具 - Agent 使用指南
 
 > **项目路径**: `/Users/qin.cui/Project/fr_beta04/financial_analysis_agent`
-> **主脚本**: `generate_beta04_v2.py` (V2.1) / `generate_beta04_v22.py` (V2.2)
+> **主脚本**: `generate_beta04_v22.py` (V2.2推荐)
 > **版本**: v2.2 (动态科目识别已完成)
-> **状态**: V2.1 (生产就绪) / V2.2 (开发完成，已测试通过)
+> **状态**: 生产就绪，支持多种数据格式
 
 ---
 
@@ -64,17 +64,17 @@ source venv/bin/activate  # macOS/Linux
 
 **运行程序**：
 ```bash
-python3 generate_beta04_v2.py <输入文件.xlsx> <输出文件.xlsx>
+python3 generate_beta04_v22.py <输入文件.xlsx> <输出文件.xlsx>
 ```
 
 ### 示例
 
 ```bash
 # 分析福耀玻璃的财务数据
-python3 generate_beta04_v2.py examples/福耀玻璃.xlsx 福耀玻璃_Beta04分析.xlsx
+python3 generate_beta04_v22.py examples/福耀玻璃.xlsx 福耀玻璃_Beta04分析.xlsx
 
 # 使用默认文件名
-python3 generate_beta04_v2.py 公司财报.xlsx
+python3 generate_beta04_v22.py 公司财报.xlsx
 ```
 
 ### 输入要求
@@ -84,7 +84,7 @@ python3 generate_beta04_v2.py 公司财报.xlsx
 2. **损益现金流** - 损益表和现金流量表数据
 3. **收入成本** - 收入和成本明细数据
 
-**重要**：科目名称应遵循标准格式，详见 `docs/Beta_04配置手册.md`
+**重要**：系统使用动态科目识别，支持多种科目名称格式。详见 JSON 配置文件说明。
 
 每个工作表的第一行应包含年份标识（如 2024, 2023, 2022...）
 
@@ -108,13 +108,13 @@ python3 generate_beta04_v2.py 公司财报.xlsx
 financial_analysis_agent/
 ├── Agents.md                          # 本文件 - Agent 使用指南
 ├── README.md                          # 用户文档
-├── generate_beta04_v2.py              # 主脚本（V2.1）
-├── subject_mapping.py                 # 科目映射工具（V2.2）
+├── generate_beta04_v22.py             # 主脚本（V2.2推荐）
+├── subject_mapping.py                 # 动态科目映射工具
+├── subject_mapping_config.json        # JSON配置：科目映射规则
+├── subject_validator_v22.py           # V2.2科目完整性验证器
 ├── requirements.txt                   # Python依赖包列表
 ├── .gitignore                         # Git忽略文件配置
 ├── venv/                              # Python虚拟环境（不提交到Git）
-├── docs/                              # 详细文档
-│   └── Beta_04配置手册.md            # 科目映射规则和财务分析公式（V2.2）
 └── examples/                          # 示例文件
     ├── 福耀玻璃.xlsx                  # 输入示例
     ├── 福耀玻璃_Beta04_完整分析.xlsx  # 输出示例
@@ -282,11 +282,11 @@ write_data_row('毛利率', values, is_percentage=True, formulas=毛利率_formu
 
 ---
 
-## 🆕 科目动态识别方案（V2.2开发中）
+## 🆕 动态科目识别系统（V2.2已完成）
 
 ### 背景
 
-V2.1版本使用硬编码行号提取数据，导致通用性问题：
+V2.1版本使用硬编码行号提取数据，存在通用性问题：
 - 不同公司的数据结构不同
 - 科目在不同行号，导致数据提取错误
 - 需要为每个公司修改代码
@@ -297,27 +297,46 @@ V2.1版本使用硬编码行号提取数据，导致通用性问题：
 
 ### 核心工具
 
-#### 1. Beta_04 配置手册（docs/Beta_04配置手册.md）
-定义了科目映射规则和财务分析公式：
+#### 1. JSON配置文件（subject_mapping_config.json）
+统一管理所有科目映射规则：
 
-**第一部分：科目映射规则**
-- Beta_04 字段与原始数据表的映射关系
-- 资产负债表数据（17项）
-- 损益表数据（16项）
-- 标准科目名称列表
+**配置结构**：
+```json
+{
+  "meta": {                           // 元信息
+    "version": "2.2.0",
+    "description": "Beta_04 财务分析系统科目映射配置"
+  },
+  "balance_mapping": {                // 资产负债表科目映射
+    "subjects": {
+      "资产": {
+        "aliases": ["资产", "资产总计", "总资产"],
+        "description": "资产合计"
+      }
+    }
+  },
+  "composite_mapping": {              // 复合科目（需汇总多个科目）
+    "subjects": {
+      "折旧摊销": {
+        "components": ["固定资产折旧", "使用权资产折旧", "无形资产摊销"],
+        "description": "折旧摊销合计"
+      }
+    }
+  }
+}
+```
 
-**第二部分：财务分析公式**
-- 盈利结构分析（10项）
-- 经营指标（10项）
-- 资产负债结构（8项）
-- 同比增长分析（4项）
-- ROE 分解（4项）
-- 估值指标（5项）
-|---------|------------|
-| 资产 | 总资产、资产总计 |
-| 现金 | 货币资金、现金及现金等价物 |
-| 营收 | 营业收入、主营业务收入、收入 |
-| 折旧摊销 | 资产折旧+使用权资产折旧+无形资产摊销+长期待摊 |
+**配置管理命令**：
+```bash
+# 查看配置信息
+python3 subject_mapping.py --config-info
+
+# 添加科目别名
+python3 subject_mapping.py --add-alias balance 货币资金 银行存款
+
+# 分析Excel文件科目映射
+python3 subject_mapping.py 你的公司.xlsx
+```
 
 #### 2. 科目映射工具（subject_mapping.py）
 提供科目名称到行号的动态映射功能：
@@ -331,59 +350,82 @@ from subject_mapping import get_value_by_label, BALANCE_MAPPING
 
 **功能特性**：
 - ✅ 精确匹配：优先匹配标准名称
-- ✅ 模糊匹配：支持别名和关键词匹配
+- ✅ 别名匹配：支持多种科目名称表述
 - ✅ 复合科目：自动汇总多个科目（如折旧摊销）
 - ✅ 调试报告：生成科目映射报告
+- ✅ JSON配置：从配置文件加载映射规则
 
-#### 3. 测试验证
+#### 3. 科目验证器（subject_validator_v22.py）
+验证核心科目的完整性：
+
+```python
+from subject_validator_v22 import validate_subjects
+
+is_valid, missing_subjects = validate_subjects(workbook)
+```
+
+**验证策略**：
+- ✅ 核心科目验证（资产、负债、权益等）
+- ✅ 宽松验证策略（可选科目缺失不影响生成）
+- ✅ 详细缺失报告
+
+#### 4. 测试验证
 
 ```bash
 # 测试科目映射
 python3 subject_mapping.py examples/福耀玻璃.xlsx
 python3 subject_mapping.py examples/金山办公.xlsx
+
+# 验证核心科目完整性
+python3 subject_validator_v22.py examples/福耀玻璃.xlsx
 ```
 
 **测试结果**：
-- ✅ 福耀玻璃：成功识别大部分科目
-- ✅ 金山办公：成功识别大部分科目
+- ✅ 福耀玻璃：成功识别所有核心科目，生成完整分析
+- ✅ 金山办公：成功识别所有核心科目，生成完整分析
 - ✅ 核心科目（资产、负债、权益、营收、成本）100%识别
 
 ### 优势
 
 1. **灵活性**：科目可以在任意行，系统自动查找
 2. **通用性**：支持不同公司的科目名称表述
-3. **可维护性**：科目映射集中管理，易于扩展
-4. **智能化**：支持别名、模糊匹配、复合科目
+3. **可维护性**：科目映射集中在JSON配置文件，易于扩展
+4. **智能化**：支持别名、复合科目、配置管理
 
 ### 使用方法
 
 **步骤1：准备数据**
 - 确保Excel文件包含三个工作表（balance、损益现金流、收入成本）
-- 使用标准科目名称
-- 参考 `docs/Beta_04配置手册.md`
+- 使用标准或常见的科目名称（系统支持多种别名）
 
-**步骤2：验证科目映射**
+**步骤2：验证科目映射（可选）**
 ```bash
+# 查看科目映射情况
 python3 subject_mapping.py 你的公司.xlsx
+
+# 验证核心科目完整性
+python3 subject_validator_v22.py 你的公司.xlsx
 ```
 
 **步骤3：生成分析表**
 ```bash
-# 当前使用V2.1（硬编码版本）
-python3 generate_beta04_v2.py 你的公司.xlsx
+python3 generate_beta04_v22.py 你的公司.xlsx
+```
 
-# 未来使用V2.2（动态识别版本）
-python3 generate_beta04_v2.2.py 你的公司.xlsx
+**步骤4：配置管理（可选）**
+```bash
+# 添加新的科目别名
+python3 subject_mapping.py --add-alias balance 货币资金 现金资产
 ```
 
 ### 开发状态
 
-- ✅ Beta_04 配置手册已完成
-- ✅ 科目映射工具已完成并优化（支持别名匹配）
-- ✅ 测试验证已完成
+- ✅ JSON配置文件已完成（subject_mapping_config.json）
+- ✅ 科目映射工具已完成并优化（支持JSON配置、别名管理）
+- ✅ 科目验证器已完成（V2.2核心科目验证策略）
 - ✅ V2.2生成器开发完成并测试通过
-- ✅ V2.2验证器已完成（核心科目验证策略）
-- ✅ 完整集成已完成
+- ✅ 完整集成已完成，生产就绪
+- ✅ 项目结构优化，移除过时文档
 
 ### V2.2 功能特性
 
@@ -391,10 +433,24 @@ python3 generate_beta04_v2.2.py 你的公司.xlsx
 - ✅ 支持科目名称别名匹配（如"收入"匹配"主营业务收入"）
 - ✅ 支持复合科目自动汇总（如应收 = 应收账款 + 应收票据）
 - ✅ 智能搜索A列和B列，适配不同数据格式
+- ✅ JSON配置驱动，灵活可扩展
+
+**配置管理**：
+- ✅ 统一的JSON配置文件管理所有映射规则
+- ✅ 支持动态添加科目别名
+- ✅ 版本化配置，便于维护和升级
+- ✅ 详细的配置验证和错误处理
+
+**验证策略**：
 - ✅ 灵活的验证策略（仅验证核心必需科目）
+- ✅ 详细的缺失科目报告
+- ✅ 防止生成不完整的分析报告
 
 **使用方法**：
 ```bash
+# 查看配置信息
+python3 subject_mapping.py --config-info
+
 # 查看科目映射报告
 python3 subject_mapping.py 你的公司.xlsx
 
@@ -414,9 +470,15 @@ python3 generate_beta04_v22.py 你的公司.xlsx
 
 ## 📖 详细文档
 
-### Beta_04 配置手册（V2.2）
-- **文件**: `docs/Beta_04配置手册.md`
-- **内容**: 科目映射规则、财务分析公式、数据准备步骤、验证清单
+### JSON配置文件（V2.2）
+- **文件**: `subject_mapping_config.json`
+- **内容**: 科目映射规则、复合科目定义、验证规则、Beta_04字段映射
+- **特点**: 结构化配置、易于维护、版本管理
+
+### 配置管理工具
+- **查看配置**: `python3 subject_mapping.py --config-info`
+- **科目分析**: `python3 subject_mapping.py <文件.xlsx>`
+- **添加别名**: `python3 subject_mapping.py --add-alias <类型> <科目> <别名>`
 
 ---
 
@@ -426,11 +488,15 @@ python3 generate_beta04_v22.py 你的公司.xlsx
 
 ```bash
 # 分析福耀玻璃财务数据
-python3 generate_beta04_v2.py examples/福耀玻璃.xlsx 福耀玻璃_分析.xlsx
+python3 generate_beta04_v22.py examples/福耀玻璃.xlsx 福耀玻璃_分析.xlsx
 ```
 
 **输出**：
 ```
+✅ 成功加载科目映射配置文件: subject_mapping_config.json
+正在验证文件 (V2.2): examples/福耀玻璃.xlsx
+✅ 核心科目验证通过：所有必需的核心科目都已找到
+
 加载源文件: examples/福耀玻璃.xlsx
   发现年份: 2024 (balance列3, income/revenue列2)
   发现年份: 2023 (balance列4, income/revenue列3)
@@ -463,7 +529,7 @@ for company in companies:
     output_file = f'{company}_Beta04.xlsx'
 
     subprocess.run([
-        'python3', 'generate_beta04_v2.py',
+        'python3', 'generate_beta04_v22.py',
         input_file, output_file
     ])
 ```
