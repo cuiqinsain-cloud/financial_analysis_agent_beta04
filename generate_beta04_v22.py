@@ -169,13 +169,31 @@ def create_beta04_analysis_v22(source_file, output_file):
         ws.column_dimensions[col_letter].width = 15
 
     # 写入年份标题（第1行）
-    ws['B1'] = '定价'
-    ws['C1'] = '定价'
+    thin_border = Border(
+        left=Side(style='thin', color='000000'),
+        right=Side(style='thin', color='000000'),
+        top=Side(style='thin', color='000000'),
+        bottom=Side(style='thin', color='000000')
+    )
+
+    # B1和C1设置为"定价"
+    for col in ['B', 'C']:
+        cell = ws[f'{col}1']
+        cell.value = '定价'
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+        cell.border = thin_border
+        cell.fill = PatternFill(start_color='E0E0E0', end_color='E0E0E0', fill_type='solid')
+
+    # 年份标题
     for i, year in enumerate(years):
         col_letter = get_column_letter(4 + i)
-        ws[f'{col_letter}1'] = year
-        ws[f'{col_letter}1'].font = Font(bold=True)
-        ws[f'{col_letter}1'].alignment = Alignment(horizontal='center')
+        cell = ws[f'{col_letter}1']
+        cell.value = year
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+        cell.border = thin_border
+        cell.fill = PatternFill(start_color='D0E0F0', end_color='D0E0F0', fill_type='solid')
 
     current_row = 2  # 从第2行开始写入数据
     row_map = {}  # 记录每个数据项的行号，用于公式引用
@@ -185,9 +203,20 @@ def create_beta04_analysis_v22(source_file, output_file):
         """写入数据行的通用函数"""
         nonlocal current_row
 
+        # 定义边框样式
+        thin_border = Border(
+            left=Side(style='thin', color='000000'),
+            right=Side(style='thin', color='000000'),
+            top=Side(style='thin', color='000000'),
+            bottom=Side(style='thin', color='000000')
+        )
+
         # 写入标签
-        ws.cell(current_row, 1).value = label
-        ws.cell(current_row, 1).font = Font(bold=is_bold)
+        label_cell = ws.cell(current_row, 1)
+        label_cell.value = label
+        label_cell.font = Font(bold=is_bold)
+        label_cell.alignment = Alignment(horizontal='left', vertical='center')
+        label_cell.border = thin_border
 
         # 写入数据或公式（从第4列开始，即D列）
         for i in range(len(years)):
@@ -210,7 +239,7 @@ def create_beta04_analysis_v22(source_file, output_file):
                     if decimals == 0:
                         cell.number_format = '#,##0'
                     else:
-                        cell.number_format = f'#,##0.{decimals * "0"}'
+                        cell.number_format = f'#,##0.{"0" * decimals}'
 
                 if is_input:
                     cell.font = Font(color=COLOR_INPUT)
@@ -218,6 +247,10 @@ def create_beta04_analysis_v22(source_file, output_file):
                     cell.font = Font(color=color)
                 else:
                     cell.font = Font(color=COLOR_LINK)
+
+            # 设置对齐和边框
+            cell.alignment = Alignment(horizontal='right', vertical='center')
+            cell.border = thin_border
 
         row_num = current_row
         current_row += 1
@@ -327,15 +360,70 @@ def create_beta04_analysis_v22(source_file, output_file):
 
     # 第三部分：盈利结构分析（从第49行开始）
     write_data_row('盈利结构', [None] * len(years), is_bold=True)
-    row_map['主营收入_盈利'] = write_data_row('主营收入', [data[year]['主营收入'] for year in years], color=COLOR_LINK, is_bold=True)
-    row_map['主营成本_盈利'] = write_data_row('主营成本', [data[year]['主营成本'] for year in years], color=COLOR_LINK)
-    row_map['费用_盈利'] = write_data_row('费用', [data[year]['费用'] for year in years], color=COLOR_LINK)
-    row_map['损耗_盈利'] = write_data_row('损耗', [data[year]['损耗'] for year in years], color=COLOR_LINK)
-    row_map['其他收益_盈利'] = write_data_row('其他收益', [data[year]['其他收益'] for year in years], color=COLOR_LINK)
-    row_map['现金收益_盈利'] = write_data_row('现金收益', [data[year]['现金收益'] for year in years], color=COLOR_LINK)
-    row_map['利息支出_盈利'] = write_data_row('利息支出', [data[year]['利息支出'] for year in years], color=COLOR_LINK)
-    row_map['财务费用_盈利'] = write_data_row('财务费用', [data[year]['财务费用'] for year in years], color=COLOR_LINK)
-    row_map['所得税_盈利'] = write_data_row('所得税', [data[year]['所得税'] for year in years], color=COLOR_LINK)
+
+    # 使用公式引用前面提取的数据
+    主营收入_盈利_formulas = []
+    for i in range(len(years)):
+        col = get_column_letter(4 + i)
+        主营收入_盈利_formulas.append(f"={col}{row_map['主营收入']}")
+    row_map['主营收入_盈利'] = write_data_row('主营收入', [None] * len(years),
+                                           formulas=主营收入_盈利_formulas, color=COLOR_FORMULA, is_bold=True)
+
+    主营成本_盈利_formulas = []
+    for i in range(len(years)):
+        col = get_column_letter(4 + i)
+        主营成本_盈利_formulas.append(f"={col}{row_map['主营成本']}")
+    row_map['主营成本_盈利'] = write_data_row('主营成本', [None] * len(years),
+                                           formulas=主营成本_盈利_formulas, color=COLOR_FORMULA)
+
+    费用_盈利_formulas = []
+    for i in range(len(years)):
+        col = get_column_letter(4 + i)
+        费用_盈利_formulas.append(f"={col}{row_map['费用']}")
+    row_map['费用_盈利'] = write_data_row('费用', [None] * len(years),
+                                       formulas=费用_盈利_formulas, color=COLOR_FORMULA)
+
+    损耗_盈利_formulas = []
+    for i in range(len(years)):
+        col = get_column_letter(4 + i)
+        损耗_盈利_formulas.append(f"={col}{row_map['损耗']}")
+    row_map['损耗_盈利'] = write_data_row('损耗', [None] * len(years),
+                                       formulas=损耗_盈利_formulas, color=COLOR_FORMULA)
+
+    其他收益_盈利_formulas = []
+    for i in range(len(years)):
+        col = get_column_letter(4 + i)
+        其他收益_盈利_formulas.append(f"={col}{row_map['其他收益']}")
+    row_map['其他收益_盈利'] = write_data_row('其他收益', [None] * len(years),
+                                           formulas=其他收益_盈利_formulas, color=COLOR_FORMULA)
+
+    现金收益_盈利_formulas = []
+    for i in range(len(years)):
+        col = get_column_letter(4 + i)
+        现金收益_盈利_formulas.append(f"={col}{row_map['现金收益']}")
+    row_map['现金收益_盈利'] = write_data_row('现金收益', [None] * len(years),
+                                           formulas=现金收益_盈利_formulas, color=COLOR_FORMULA)
+
+    利息支出_盈利_formulas = []
+    for i in range(len(years)):
+        col = get_column_letter(4 + i)
+        利息支出_盈利_formulas.append(f"={col}{row_map['利息支出']}")
+    row_map['利息支出_盈利'] = write_data_row('利息支出', [None] * len(years),
+                                           formulas=利息支出_盈利_formulas, color=COLOR_FORMULA)
+
+    财务费用_盈利_formulas = []
+    for i in range(len(years)):
+        col = get_column_letter(4 + i)
+        财务费用_盈利_formulas.append(f"={col}{row_map['财务费用']}")
+    row_map['财务费用_盈利'] = write_data_row('财务费用', [None] * len(years),
+                                           formulas=财务费用_盈利_formulas, color=COLOR_FORMULA)
+
+    所得税_盈利_formulas = []
+    for i in range(len(years)):
+        col = get_column_letter(4 + i)
+        所得税_盈利_formulas.append(f"={col}{row_map['所得税']}")
+    row_map['所得税_盈利'] = write_data_row('所得税', [None] * len(years),
+                                         formulas=所得税_盈利_formulas, color=COLOR_FORMULA)
 
     # 业务利润公式
     业务利润_formulas = []
@@ -350,7 +438,12 @@ def create_beta04_analysis_v22(source_file, output_file):
                                        formulas=业务利润_formulas, color=COLOR_FORMULA, is_bold=True)
 
     # 股权收益
-    row_map['股权收益_盈利'] = write_data_row('股权收益', [data[year]['股权收益'] for year in years], color=COLOR_LINK)
+    股权收益_盈利_formulas = []
+    for i in range(len(years)):
+        col = get_column_letter(4 + i)
+        股权收益_盈利_formulas.append(f"={col}{row_map['股权收益']}")
+    row_map['股权收益_盈利'] = write_data_row('股权收益', [None] * len(years),
+                                           formulas=股权收益_盈利_formulas, color=COLOR_FORMULA)
 
     # 其他业务利润公式
     其他业务利润_formulas = []
@@ -380,7 +473,12 @@ def create_beta04_analysis_v22(source_file, output_file):
                                     formulas=净利润_formulas, color=COLOR_FORMULA)
 
     # 分红
-    row_map['分红'] = write_data_row('分红', [data[year]['股息分红'] for year in years], color=COLOR_LINK)
+    分红_formulas = []
+    for i in range(len(years)):
+        col = get_column_letter(4 + i)
+        分红_formulas.append(f"={col}{row_map['股息分红']}")
+    row_map['分红'] = write_data_row('分红', [None] * len(years),
+                                   formulas=分红_formulas, color=COLOR_FORMULA)
 
     # 利润留存公式
     利润留存_formulas = []
@@ -392,10 +490,20 @@ def create_beta04_analysis_v22(source_file, output_file):
                                       formulas=利润留存_formulas, color=COLOR_FORMULA, is_bold=True)
 
     # 折旧摊销
-    row_map['折旧摊销_盈利'] = write_data_row('折旧摊销', [data[year]['折旧摊销'] for year in years], color=COLOR_LINK)
+    折旧摊销_盈利_formulas = []
+    for i in range(len(years)):
+        col = get_column_letter(4 + i)
+        折旧摊销_盈利_formulas.append(f"={col}{row_map['折旧摊销']}")
+    row_map['折旧摊销_盈利'] = write_data_row('折旧摊销', [None] * len(years),
+                                           formulas=折旧摊销_盈利_formulas, color=COLOR_FORMULA)
 
     # CAPEX
-    row_map['CAPEX'] = write_data_row('CAPEX', [data[year]['资本开支'] for year in years], color=COLOR_LINK)
+    CAPEX_formulas = []
+    for i in range(len(years)):
+        col = get_column_letter(4 + i)
+        CAPEX_formulas.append(f"={col}{row_map['资本开支']}")
+    row_map['CAPEX'] = write_data_row('CAPEX', [None] * len(years),
+                                     formulas=CAPEX_formulas, color=COLOR_FORMULA)
 
     # 现金留存公式
     现金留存_formulas = []
