@@ -121,14 +121,14 @@ def create_beta04_analysis_v22(source_file, output_file):
     # 验证科目完整性
     if VALIDATION_AVAILABLE:
         print("\n正在验证科目完整性...")
-        is_valid, missing_subjects = validate_subjects(source_wb)
+        is_valid, validation_report = validate_subjects(source_wb)
 
         if not is_valid:
-            print_validation_report(missing_subjects)
+            print_validation_report(validation_report)
             source_wb.close()
             raise ValueError("科目验证失败，请完善数据源后重试")
 
-        print("✅ 科目验证通过：所有必需科目都已找到\n")
+        print("✅ 科目验证通过：所有必需字段都已找到\n")
 
     # 获取源数据表
     balance = source_wb['balance']
