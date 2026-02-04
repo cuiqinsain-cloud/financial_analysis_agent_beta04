@@ -2,7 +2,7 @@
 
 > **项目路径**: `/Users/qin.cui/Project/fr_beta04/financial_analysis_agent`
 > **主脚本**: `generate_beta04_v22.py` (V2.2推荐)
-> **版本**: V2.2.2 (当前版本)
+> **版本**: V2.2.5 (当前版本)
 > **状态**: 生产就绪，仅供财务分析使用
 
 ---

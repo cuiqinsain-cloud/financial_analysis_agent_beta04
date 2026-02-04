@@ -279,7 +279,7 @@ def create_beta04_analysis_v22(source_file, output_file):
             data[year][field_name] = get_dynamic_value(revenue, REVENUE_MAPPING, field_name, revenue_col)
 
         # 计算复合字段
-        data[year]['费用'] = (data[year]['销售费用'] or 0) + (data[year]['管理费用'] or 0) + (data[year]['研发费用'] or 0)
+        data[year]['费用'] = (data[year]['销售费用'] or 0) + (data[year]['管理费用'] or 0) + (data[year]['研发费用'] or 0) + (data[year]['税金及附加'] or 0)
 
     print("正在生成分析表...")
 
@@ -338,6 +338,7 @@ def create_beta04_analysis_v22(source_file, output_file):
     row_map['研发费用'] = write_data_row('研发费用', [data[year]['研发费用'] for year in years], color=COLOR_LINK)
     row_map['销售费用'] = write_data_row('销售费用', [data[year]['销售费用'] for year in years], color=COLOR_LINK)
     row_map['管理费用'] = write_data_row('管理费用', [data[year]['管理费用'] for year in years], color=COLOR_LINK)
+    row_map['税金及附加'] = write_data_row('税金及附加', [data[year]['税金及附加'] for year in years], color=COLOR_LINK)
     row_map['损耗'] = write_data_row('损耗', [data[year]['损耗'] for year in years], color=COLOR_LINK)
     row_map['其他收益'] = write_data_row('其他收益', [data[year]['其他收益'] for year in years], color=COLOR_LINK, is_bold=True)
     row_map['现金收益'] = write_data_row('现金收益', [data[year]['现金收益'] for year in years], color=COLOR_LINK, is_bold=True)
@@ -922,8 +923,6 @@ def create_beta04_analysis_v22(source_file, output_file):
     current_row += 1  # 空行
 
     # 第八部分：估值指标（从第120行开始）
-    write_data_row('股息', [None] * len(years), is_bold=True)
-
     # EPS（每股收益）
     EPS_formulas = []
     for i in range(len(years)):
@@ -962,19 +961,19 @@ def create_beta04_analysis_v22(source_file, output_file):
     write_data_row('PE', [None] * len(years), decimals=2,
                   formulas=PE_L_formulas, color=COLOR_FORMULA, is_bold=True)
 
-    # 股息率（高）
+    # 股息率（高）- 分子取股息分红
     股息率_H_formulas = []
     for i in range(len(years)):
         col = get_column_letter(4 + i)
-        股息率_H_formulas.append(f"=({col}{row_map['股息分红']}/{col}{row_map['股本']})/{col}{row_map['价格H']}")
+        股息率_H_formulas.append(f"={col}{row_map['股息分红']}/({col}{row_map['价格H']}*{col}{row_map['股本']})")
     write_data_row('股息率', [None] * len(years), is_percentage=True,
                   formulas=股息率_H_formulas, color=COLOR_FORMULA, is_bold=True)
 
-    # 股息率（低）
+    # 股息率（低）- 分子取股息分红
     股息率_L_formulas = []
     for i in range(len(years)):
         col = get_column_letter(4 + i)
-        股息率_L_formulas.append(f"=({col}{row_map['股息分红']}/{col}{row_map['股本']})/{col}{row_map['价格L']}")
+        股息率_L_formulas.append(f"={col}{row_map['股息分红']}/({col}{row_map['价格L']}*{col}{row_map['股本']})")
     write_data_row('股息率', [None] * len(years), is_percentage=True,
                   formulas=股息率_L_formulas, color=COLOR_FORMULA, is_bold=True)
 
